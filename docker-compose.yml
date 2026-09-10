@@ -1,0 +1,10 @@
+services:
+  cow-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
