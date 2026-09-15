@@ -74,3 +74,45 @@ func TestRecordsLeavesCameraIDEmptyWhenAbsent(t *testing.T) {
 		t.Fatalf("expected empty camera id, got %q", records[0].CameraID)
 	}
 }
+
+func TestRecordsNormalizesNGSILDPropertiesAndTimestamps(t *testing.T) {
+	cfg := config.Config{AllowAllCowIDs: true}
+	receivedAt := time.Date(2026, 9, 15, 2, 0, 0, 0, time.UTC)
+	payloads := []map[string]any{{
+		"s4agri:animalId": map[string]any{"type": "Property", "value": "93_cam0_dummy_id"},
+		"shepherd:BodyTemperature": map[string]any{
+			"type": "Property", "value": 38.2, "observedAt": "2026-09-15T01:56:14Z",
+		},
+		"s4agri:MilkYield": map[string]any{"type": "Property", "value": nil, "observedAt": nil},
+		"shepherd:elevatedBodyTemperatureAlert": map[string]any{
+			"type": "Property", "value": false, "observedAt": "2026-09-15T01:56:14Z",
+		},
+		"shepherd:healthAlert": map[string]any{
+			"type": "Property", "value": "NONE", "observedAt": "2026-09-15T00:00:00Z",
+		},
+	}}
+
+	records, rejected := Records(cfg, payloads, receivedAt)
+	if rejected != 0 || len(records) != 1 {
+		t.Fatalf("expected one accepted record, got %d accepted and %d rejected", len(records), rejected)
+	}
+	record := records[0]
+	if record.CowID != 93 || record.CameraID != "cam0" {
+		t.Fatalf("unexpected cow/camera: %d/%q", record.CowID, record.CameraID)
+	}
+	if record.BodyTemperature == nil || *record.BodyTemperature != 38.2 {
+		t.Fatalf("unexpected body temperature: %v", record.BodyTemperature)
+	}
+	if record.BodyTemperatureObservedAt == nil || record.BodyTemperatureObservedAt.Format(time.RFC3339) != "2026-09-15T01:56:14Z" {
+		t.Fatalf("unexpected body temperature timestamp: %v", record.BodyTemperatureObservedAt)
+	}
+	if record.HealthAlertObservedAt == nil || record.HealthAlertObservedAt.Format(time.RFC3339) != "2026-09-15T00:00:00Z" {
+		t.Fatalf("unexpected health alert timestamp: %v", record.HealthAlertObservedAt)
+	}
+	if record.MilkYield != nil || record.MilkYieldObservedAt != nil {
+		t.Fatalf("expected missing milk yield and timestamp, got %v/%v", record.MilkYield, record.MilkYieldObservedAt)
+	}
+	if record.ObservedAt.Format(time.RFC3339) != "2026-09-15T01:56:14Z" {
+		t.Fatalf("unexpected record timestamp %s", record.ObservedAt.Format(time.RFC3339))
+	}
+}

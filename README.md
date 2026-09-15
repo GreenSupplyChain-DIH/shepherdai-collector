@@ -56,4 +56,6 @@ The CEI-InOE migration creates the `jetson_telemetry` schema and these tables:
 - `cow_telemetry_history`: timestamp, cow ID, camera ID, temperature, milk yield, milk reduction ratio, alert flags, health level, and receive time.
 - `cow_alert_events`: one row per active alert type (`MILK`, `HEALTH`, or `ELEVATED_BODY`), with timestamp, cow ID, camera ID, and the metric relevant to that alert.
 
+For NGSI-LD properties, each value's `observedAt` is stored in its matching `*_observed_at` column. The telemetry `time` column uses the latest available observation timestamp and falls back to the receipt time only when the payload contains none.
+
 For a source identifier such as `333_cam1_dummy`, the collector stores `cow_id = 333` and `camera_id = cam1`. If no `camN` token is present, `camera_id` is an empty string.

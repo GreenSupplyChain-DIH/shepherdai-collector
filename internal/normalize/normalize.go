@@ -32,7 +32,6 @@ func Records(cfg config.Config, payloads []map[string]any, receivedAt time.Time)
 		}
 		records = append(records, record)
 	}
-
 	return records, rejected
 }
 
@@ -59,24 +58,73 @@ func normalizeRecord(payload map[string]any, receivedAt time.Time) (models.Telem
 		"timestamp",
 		"time",
 	)
-	if !ok {
-		observedAt = receivedAt.UTC()
-	}
+	bodyTemperatureObservedAt := findPropertyTime(payload, "bodyTemperature", "shepherd:BodyTemperature", "temperature")
+	milkYieldObservedAt := findPropertyTime(payload, "milkYield", "s4agri:MilkYield")
+	milkReductionRatioObservedAt := findPropertyTime(payload, "milkReductionRatio", "shepherd:milkReductionRatio")
+	elevatedTempAlertObservedAt := findPropertyTime(payload, "elevatedBodyTemperatureAlert", "shepherd:elevatedBodyTemperatureAlert")
+	milkAlertObservedAt := findPropertyTime(payload, "milkAlert", "shepherd:milkAlert")
+	healthAlertObservedAt := findPropertyTime(payload, "healthAlert", "shepherd:healthAlert")
+	observedAt = latestTime(observedAt, ok, receivedAt.UTC(), bodyTemperatureObservedAt, milkYieldObservedAt, milkReductionRatioObservedAt, elevatedTempAlertObservedAt, milkAlertObservedAt, healthAlertObservedAt)
 
 	record := models.TelemetryRecord{
-		ObservedAt:         observedAt.UTC(),
-		CowID:              cowID,
-		CameraID:           strings.ToLower(strings.TrimSpace(cameraID)),
-		BodyTemperature:    findFloatPtr(payload, "bodyTemperature", "shepherd:BodyTemperature", "temperature"),
-		MilkYield:          findFloatPtr(payload, "milkYield", "s4agri:MilkYield"),
-		MilkReductionRatio: findFloatPtr(payload, "milkReductionRatio", "shepherd:milkReductionRatio"),
-		ElevatedTempAlert:  findBool(payload, "elevatedBodyTemperatureAlert", "shepherd:elevatedBodyTemperatureAlert"),
-		MilkAlert:          findBool(payload, "milkAlert", "shepherd:milkAlert"),
-		HealthAlert:        defaultAlert(findString(payload, "healthAlert", "shepherd:healthAlert")),
-		ReceivedAt:         receivedAt.UTC(),
+		ObservedAt:                   observedAt,
+		CowID:                        cowID,
+		CameraID:                     strings.ToLower(strings.TrimSpace(cameraID)),
+		BodyTemperature:              findFloatPtr(payload, "bodyTemperature", "shepherd:BodyTemperature", "temperature"),
+		BodyTemperatureObservedAt:    bodyTemperatureObservedAt,
+		MilkYield:                    findFloatPtr(payload, "milkYield", "s4agri:MilkYield"),
+		MilkYieldObservedAt:          milkYieldObservedAt,
+		MilkReductionRatio:           findFloatPtr(payload, "milkReductionRatio", "shepherd:milkReductionRatio"),
+		MilkReductionRatioObservedAt: milkReductionRatioObservedAt,
+		ElevatedTempAlert:            findBool(payload, "elevatedBodyTemperatureAlert", "shepherd:elevatedBodyTemperatureAlert"),
+		ElevatedTempAlertObservedAt:  elevatedTempAlertObservedAt,
+		MilkAlert:                    findBool(payload, "milkAlert", "shepherd:milkAlert"),
+		MilkAlertObservedAt:          milkAlertObservedAt,
+		HealthAlert:                  defaultAlert(findString(payload, "healthAlert", "shepherd:healthAlert")),
+		HealthAlertObservedAt:        healthAlertObservedAt,
+		ReceivedAt:                   receivedAt.UTC(),
 	}
 
 	return record, true
+}
+
+func findPropertyTime(payload map[string]any, keys ...string) *time.Time {
+	for _, key := range keys {
+		value, ok := lookup(payload, key)
+		if !ok {
+			continue
+		}
+		property, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		observedAt, ok := property["observedAt"].(string)
+		if !ok {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, observedAt)
+		if err == nil {
+			parsed = parsed.UTC()
+			return &parsed
+		}
+	}
+	return nil
+}
+
+func latestTime(explicit time.Time, hasExplicit bool, fallback time.Time, timestamps ...*time.Time) time.Time {
+	var latest time.Time
+	if hasExplicit {
+		latest = explicit.UTC()
+	}
+	for _, timestamp := range timestamps {
+		if timestamp != nil && timestamp.After(latest) {
+			latest = timestamp.UTC()
+		}
+	}
+	if latest.IsZero() {
+		return fallback.UTC()
+	}
+	return latest
 }
 
 func findIdentifier(payload map[string]any, keys ...string) (any, bool) {

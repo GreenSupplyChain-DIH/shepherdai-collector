@@ -1,6 +1,10 @@
 package alerts
 
-import "github.com/GreenSupplyChain-DIH/cow-collector/internal/models"
+import (
+	"time"
+
+	"github.com/GreenSupplyChain-DIH/cow-collector/internal/models"
+)
 
 func ActiveEvents(records []models.TelemetryRecord) []models.AlertEvent {
 	events := make([]models.AlertEvent, 0)
@@ -23,7 +27,7 @@ func newEvent(record models.TelemetryRecord, alertType string) models.AlertEvent
 		CowID:     record.CowID,
 		CameraID:  record.CameraID,
 		AlertType: alertType,
-		StartTime: record.ObservedAt,
+		StartTime: alertObservedAt(record, alertType),
 		Resolved:  false,
 	}
 	switch alertType {
@@ -34,4 +38,20 @@ func newEvent(record models.TelemetryRecord, alertType string) models.AlertEvent
 		event.PeakTemperature = record.BodyTemperature
 	}
 	return event
+}
+
+func alertObservedAt(record models.TelemetryRecord, alertType string) time.Time {
+	var observedAt *time.Time
+	switch alertType {
+	case "MILK":
+		observedAt = record.MilkAlertObservedAt
+	case "HEALTH":
+		observedAt = record.HealthAlertObservedAt
+	case "ELEVATED_BODY":
+		observedAt = record.ElevatedTempAlertObservedAt
+	}
+	if observedAt == nil {
+		return record.ObservedAt
+	}
+	return *observedAt
 }

@@ -49,23 +49,35 @@ INSERT INTO %s (
     cow_id,
 	camera_id,
     body_temperature,
+	body_temperature_observed_at,
     milk_yield,
+	milk_yield_observed_at,
     milk_reduction_ratio,
+	milk_reduction_ratio_observed_at,
     elevated_temp_alert,
+	elevated_temp_alert_observed_at,
     milk_alert,
+	milk_alert_observed_at,
     health_alert,
+	health_alert_observed_at,
 	received_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 ON CONFLICT (time, cow_id) DO UPDATE SET
 	camera_id = EXCLUDED.camera_id,
     body_temperature = COALESCE(EXCLUDED.body_temperature, %s.body_temperature),
+	body_temperature_observed_at = COALESCE(EXCLUDED.body_temperature_observed_at, %s.body_temperature_observed_at),
     milk_yield = COALESCE(EXCLUDED.milk_yield, %s.milk_yield),
+	milk_yield_observed_at = COALESCE(EXCLUDED.milk_yield_observed_at, %s.milk_yield_observed_at),
     milk_reduction_ratio = COALESCE(EXCLUDED.milk_reduction_ratio, %s.milk_reduction_ratio),
+	milk_reduction_ratio_observed_at = COALESCE(EXCLUDED.milk_reduction_ratio_observed_at, %s.milk_reduction_ratio_observed_at),
     elevated_temp_alert = EXCLUDED.elevated_temp_alert,
+	elevated_temp_alert_observed_at = COALESCE(EXCLUDED.elevated_temp_alert_observed_at, %s.elevated_temp_alert_observed_at),
     milk_alert = EXCLUDED.milk_alert,
+	milk_alert_observed_at = COALESCE(EXCLUDED.milk_alert_observed_at, %s.milk_alert_observed_at),
     health_alert = EXCLUDED.health_alert,
+	health_alert_observed_at = COALESCE(EXCLUDED.health_alert_observed_at, %s.health_alert_observed_at),
 	received_at = EXCLUDED.received_at
-`, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable)
+`, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable, r.telemetryTable)
 
 	for _, record := range records {
 		batch.Queue(query,
@@ -73,15 +85,20 @@ ON CONFLICT (time, cow_id) DO UPDATE SET
 			record.CowID,
 			record.CameraID,
 			record.BodyTemperature,
+			record.BodyTemperatureObservedAt,
 			record.MilkYield,
+			record.MilkYieldObservedAt,
 			record.MilkReductionRatio,
+			record.MilkReductionRatioObservedAt,
 			record.ElevatedTempAlert,
+			record.ElevatedTempAlertObservedAt,
 			record.MilkAlert,
+			record.MilkAlertObservedAt,
 			record.HealthAlert,
+			record.HealthAlertObservedAt,
 			record.ReceivedAt,
 		)
 	}
-
 	results := r.pool.SendBatch(ctx, batch)
 	defer results.Close()
 	for range records {
