@@ -99,6 +99,38 @@ func (a *App) Run(ctx context.Context) error {
 	}
 }
 
+func (a *App) Backfill(ctx context.Context, from time.Time, to time.Time) error {
+	defer a.repo.Close()
+
+	var failures []error
+	for date := from.UTC(); !date.After(to.UTC()); date = date.AddDate(0, 0, 1) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		started := time.Now()
+		payloads, err := a.client.FetchForDate(ctx, date)
+		if err == nil {
+			accepted, rejected, persistErr := a.persistPayloads(ctx, payloads, time.Now().UTC(), true)
+			if persistErr != nil {
+				err = persistErr
+			} else {
+				a.logger.Info("backfill date complete", "date", date.Format(time.DateOnly), "fetched", len(payloads), "accepted", accepted, "rejected", rejected, "duration", time.Since(started).String())
+			}
+		}
+		if err != nil {
+			failure := fmt.Errorf("backfill %s: %w", date.Format(time.DateOnly), err)
+			failures = append(failures, failure)
+			a.logger.Error("backfill date failed", "date", date.Format(time.DateOnly), "error", err, "duration", time.Since(started).String())
+		}
+	}
+
+	if len(failures) > 0 {
+		return fmt.Errorf("backfill completed with %d failed date(s): %w", len(failures), errors.Join(failures...))
+	}
+	return nil
+}
+
 func (a *App) shutdown(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -111,25 +143,34 @@ func (a *App) pollOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	receivedAt := time.Now().UTC()
-	records, rejected := normalize.Records(a.cfg, payloads, receivedAt)
-	events := alerts.ActiveEvents(records)
-
-	if err := a.repo.UpsertTelemetry(ctx, records); err != nil {
+	accepted, rejected, err := a.persistPayloads(ctx, payloads, time.Now().UTC(), false)
+	if err != nil {
+		records, _ := normalize.Records(a.cfg, payloads, time.Now().UTC())
 		_ = a.buffer.Store(ctx, records)
 		a.health.RecordBuffer(len(records), err)
 		return err
-	}
-	if err := a.repo.UpsertAlerts(ctx, events); err != nil {
-		a.logger.Warn("alert upsert failed", "error", err)
 	}
 	if err := a.flushBuffered(ctx); err != nil {
 		a.logger.Warn("buffer flush failed", "error", err)
 	}
 
-	a.health.RecordPoll(len(records), rejected)
-	a.logger.Info("poll complete", "fetched", len(payloads), "accepted", len(records), "rejected", rejected, "duration", time.Since(started).String())
+	a.health.RecordPoll(accepted, rejected)
+	a.logger.Info("poll complete", "fetched", len(payloads), "accepted", accepted, "rejected", rejected, "duration", time.Since(started).String())
 	return nil
+}
+
+func (a *App) persistPayloads(ctx context.Context, payloads []map[string]any, receivedAt time.Time, returnAlertError bool) (int, int, error) {
+	records, rejected := normalize.Records(a.cfg, payloads, receivedAt)
+	if err := a.repo.UpsertTelemetry(ctx, records); err != nil {
+		return len(records), rejected, err
+	}
+	if err := a.repo.UpsertAlerts(ctx, alerts.ActiveEvents(records)); err != nil {
+		if returnAlertError {
+			return len(records), rejected, err
+		}
+		a.logger.Warn("alert upsert failed", "error", err)
+	}
+	return len(records), rejected, nil
 }
 
 func (a *App) flushBuffered(ctx context.Context) error {

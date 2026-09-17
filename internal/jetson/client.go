@@ -31,7 +31,15 @@ func NewClient(cfg config.Config) *Client {
 }
 
 func (c *Client) Fetch(ctx context.Context) ([]map[string]any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+c.endpoint, nil)
+	return c.fetch(ctx, c.endpoint)
+}
+
+func (c *Client) FetchForDate(ctx context.Context, date time.Time) ([]map[string]any, error) {
+	return c.fetch(ctx, "/health-status/"+date.UTC().Format("2006-01-02"))
+}
+
+func (c *Client) fetch(ctx context.Context, endpoint string) ([]map[string]any, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {
 		return nil, err
 	}

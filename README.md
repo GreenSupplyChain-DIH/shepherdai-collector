@@ -32,6 +32,18 @@ External Go microservice for polling the Jetson livestock API and persisting nor
 3. Run `make test`.
 4. Run `make run`.
 
+## Historical backfill
+
+Import a bounded, inclusive UTC date range from the Jetson history endpoint:
+
+```sh
+go run ./cmd/cow-collector backfill --from 2026-09-01 --to 2026-09-15
+```
+
+The command requests `GET {JETSON_BASE_URL}/health-status/{YYYY-MM-DD}` once for each date, then applies the same normalization, telemetry persistence, and active-alert projection as live polling. It does not start the health server, polling loop, or local retry buffer.
+
+Backfill continues when an individual date fails and exits non-zero after the range completes if any dates failed. It is safe to rerun the same range because telemetry and alert writes are upserts.
+
 ## Compose integration with CEI-InOE
 
 The CEI-InOE repository contains `docker-compose-integration-services.yml` for same-machine deployment. Start both stacks from the CEI-InOE repository root:
