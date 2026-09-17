@@ -1,10 +1,10 @@
 # Cow Collector
 
-External Go microservice for polling the Jetson livestock API and persisting normalized telemetry into the CEI-InOE PostgreSQL database.
+External Go microservice for polling the SHEPHERD-AI livestock API and persisting normalized telemetry into the CEI-InOE PostgreSQL database.
 
 ## Scope
 
-- Poll the Jetson API on a fixed interval.
+- Poll the SHEPHERD-AI API on a fixed interval.
 - Normalize incoming telemetry into a stable database shape.
 - Filter records to a configured set of cow IDs.
 - Upsert telemetry rows idempotently on `(time, cow_id)`.
@@ -17,7 +17,7 @@ External Go microservice for polling the Jetson livestock API and persisting nor
 
 - `cmd/cow-collector`: binary entrypoint.
 - `internal/config`: environment-backed configuration.
-- `internal/jetson`: HTTP client for the Jetson API.
+- `internal/jetson`: HTTP client for the SHEPHERD-AI API.
 - `internal/normalize`: payload flattening and cow filtering.
 - `internal/storage`: PostgreSQL repository logic.
 - `internal/buffer`: local JSONL retry buffer.
@@ -27,14 +27,14 @@ External Go microservice for polling the Jetson livestock API and persisting nor
 
 ## Local development
 
-1. Copy `.env.example` to `.env` and fill in the Jetson and database values.
+1. Copy `.env.example` to `.env` and fill in the SHEPHERD-AI and database values.
 2. Ensure the CEI-InOE PostgreSQL service is reachable and the telemetry tables already exist.
 3. Run `make test`.
 4. Run `make run`.
 
 ## Historical backfill
 
-Import a bounded, inclusive UTC date range from the Jetson history endpoint:
+Import a bounded, inclusive UTC date range from the SHEPHERD-AI history endpoint:
 
 ```sh
 go run ./cmd/cow-collector backfill --from 2026-09-01 --to 2026-09-15
