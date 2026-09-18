@@ -116,3 +116,59 @@ func TestRecordsNormalizesNGSILDPropertiesAndTimestamps(t *testing.T) {
 		t.Fatalf("unexpected record timestamp %s", record.ObservedAt.Format(time.RFC3339))
 	}
 }
+
+func TestRecordsPreservesOffsetTimestamps(t *testing.T) {
+	cfg := config.Config{AllowAllCowIDs: true}
+	receivedAt := time.Date(2026, 9, 18, 15, 0, 0, 0, time.FixedZone("EEST", 3*60*60))
+	payloads := []map[string]any{{
+		"cow_id": "101_cam2_dummy",
+		"shepherd:BodyTemperature": map[string]any{
+			"type": "Property", "value": 39.0, "observedAt": "2026-09-18T13:45:00+03:00",
+		},
+		"shepherd:healthAlert": map[string]any{
+			"type": "Property", "value": "NONE", "observedAt": "2026-09-18T13:40:00+03:00",
+		},
+	}}
+
+	records, rejected := Records(cfg, payloads, receivedAt)
+	if rejected != 0 || len(records) != 1 {
+		t.Fatalf("expected one accepted record, got %d accepted and %d rejected", len(records), rejected)
+	}
+	record := records[0]
+	if record.ObservedAt.Format(time.RFC3339) != "2026-09-18T13:45:00+03:00" {
+		t.Fatalf("unexpected record timestamp %s", record.ObservedAt.Format(time.RFC3339))
+	}
+	if record.BodyTemperatureObservedAt == nil || record.BodyTemperatureObservedAt.Format(time.RFC3339) != "2026-09-18T13:45:00+03:00" {
+		t.Fatalf("unexpected body temperature observedAt: %v", record.BodyTemperatureObservedAt)
+	}
+	if record.HealthAlertObservedAt == nil || record.HealthAlertObservedAt.Format(time.RFC3339) != "2026-09-18T13:40:00+03:00" {
+		t.Fatalf("unexpected health alert observedAt: %v", record.HealthAlertObservedAt)
+	}
+	if record.ReceivedAt.Format(time.RFC3339) != "2026-09-18T15:00:00+03:00" {
+		t.Fatalf("unexpected receivedAt %s", record.ReceivedAt.Format(time.RFC3339))
+	}
+}
+
+func TestRecordsFallsBackToReceivedAtWithoutTimezoneRewrite(t *testing.T) {
+	cfg := config.Config{AllowAllCowIDs: true}
+	receivedAt := time.Date(2026, 9, 18, 16, 5, 0, 0, time.FixedZone("EEST", 3*60*60))
+	payloads := []map[string]any{{
+		"cow_id":          222,
+		"bodyTemperature": 38.7,
+	}}
+
+	records, rejected := Records(cfg, payloads, receivedAt)
+	if rejected != 0 || len(records) != 1 {
+		t.Fatalf("expected one accepted record, got %d accepted and %d rejected", len(records), rejected)
+	}
+	record := records[0]
+	if !record.ObservedAt.Equal(receivedAt) {
+		t.Fatalf("expected observedAt to equal receivedAt, got %s vs %s", record.ObservedAt.Format(time.RFC3339), receivedAt.Format(time.RFC3339))
+	}
+	if record.ObservedAt.Format(time.RFC3339) != "2026-09-18T16:05:00+03:00" {
+		t.Fatalf("unexpected observedAt %s", record.ObservedAt.Format(time.RFC3339))
+	}
+	if record.ReceivedAt.Format(time.RFC3339) != "2026-09-18T16:05:00+03:00" {
+		t.Fatalf("unexpected receivedAt %s", record.ReceivedAt.Format(time.RFC3339))
+	}
+}

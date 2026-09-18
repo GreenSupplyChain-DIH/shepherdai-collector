@@ -64,7 +64,7 @@ func normalizeRecord(payload map[string]any, receivedAt time.Time) (models.Telem
 	elevatedTempAlertObservedAt := findPropertyTime(payload, "elevatedBodyTemperatureAlert", "shepherd:elevatedBodyTemperatureAlert")
 	milkAlertObservedAt := findPropertyTime(payload, "milkAlert", "shepherd:milkAlert")
 	healthAlertObservedAt := findPropertyTime(payload, "healthAlert", "shepherd:healthAlert")
-	observedAt = latestTime(observedAt, ok, receivedAt.UTC(), bodyTemperatureObservedAt, milkYieldObservedAt, milkReductionRatioObservedAt, elevatedTempAlertObservedAt, milkAlertObservedAt, healthAlertObservedAt)
+	observedAt = latestTime(observedAt, ok, receivedAt, bodyTemperatureObservedAt, milkYieldObservedAt, milkReductionRatioObservedAt, elevatedTempAlertObservedAt, milkAlertObservedAt, healthAlertObservedAt)
 
 	record := models.TelemetryRecord{
 		ObservedAt:                   observedAt,
@@ -82,7 +82,7 @@ func normalizeRecord(payload map[string]any, receivedAt time.Time) (models.Telem
 		MilkAlertObservedAt:          milkAlertObservedAt,
 		HealthAlert:                  defaultAlert(findString(payload, "healthAlert", "shepherd:healthAlert")),
 		HealthAlertObservedAt:        healthAlertObservedAt,
-		ReceivedAt:                   receivedAt.UTC(),
+		ReceivedAt:                   receivedAt,
 	}
 
 	return record, true
@@ -104,7 +104,6 @@ func findPropertyTime(payload map[string]any, keys ...string) *time.Time {
 		}
 		parsed, err := time.Parse(time.RFC3339, observedAt)
 		if err == nil {
-			parsed = parsed.UTC()
 			return &parsed
 		}
 	}
@@ -114,15 +113,15 @@ func findPropertyTime(payload map[string]any, keys ...string) *time.Time {
 func latestTime(explicit time.Time, hasExplicit bool, fallback time.Time, timestamps ...*time.Time) time.Time {
 	var latest time.Time
 	if hasExplicit {
-		latest = explicit.UTC()
+		latest = explicit
 	}
 	for _, timestamp := range timestamps {
 		if timestamp != nil && timestamp.After(latest) {
-			latest = timestamp.UTC()
+			latest = *timestamp
 		}
 	}
 	if latest.IsZero() {
-		return fallback.UTC()
+		return fallback
 	}
 	return latest
 }
